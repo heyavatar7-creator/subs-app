@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Мои подписки</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --bg:       var(--tg-theme-bg-color, #1c1c1e);
+      --card-bg:  var(--tg-theme-secondary-bg-color, #2c2c2e);
+      --text:     var(--tg-theme-text-color, #ffffff);
+      --hint:     var(--tg-theme-hint-color, rgba(255,255,255,0.5));
+      --accent:   var(--tg-theme-button-color, #5865f2);
+      --ok:       #22c55e;
+      --warn:     #f59e0b;
+      --danger:   #ef4444;
+      --radius:   16px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 32px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ── */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      padding: 20px 16px 14px;
+      background: var(--bg);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header-left h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      line-height: 1;
+    }
+
+    .badge {
+      margin-top: 5px;
+      font-size: 13px;
+      color: var(--hint);
+    }
+
+    .refresh-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.07);
+      border: none;
+      color: var(--hint);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, transform 0.3s;
+    }
+
+    .refresh-btn:active { background: rgba(255,255,255,0.13); }
+    .refresh-btn.spinning { animation: spin 0.7s linear infinite; }
+
+    /* ── States ── */
+    .state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 32px;
+      gap: 10px;
+      text-align: center;
+    }
+
+    .state-icon  { font-size: 54px; }
+    .state-title { font-size: 18px; font-weight: 600; }
+    .state-hint  { font-size: 14px; color: var(--hint); line-height: 1.55; }
+
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .hidden { display: none !important; }
+
+    /* ── List ── */
+    .list {
+      padding: 14px 16px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid transparent;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+    }
+
+    .card.urgent {
+      border-color: rgba(239,68,68,0.3);
+      box-shadow: 0 0 0 1px rgba(239,68,68,0.1) inset,
+                  0 6px 24px rgba(239,68,68,0.1);
+    }
+
+    .card.removing {
+      transform: translateX(-110%);
+      opacity: 0;
+      pointer-events: none;
+      margin-bottom: -88px; /* collapse height smoothly */
+    }
+
+    /* Card top row */
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      gap: 8px;
+    }
+
+    .card-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .svc-icon {
+      width: 42px; height: 42px;
+      border-radius: 11px;
+      background: rgba(255,255,255,0.07);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 23px;
+      flex-shrink: 0;
+    }
+
+    .svc-name {
+      font-size: 16px;
+      font-weight: 600;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .svc-cost {
+      font-size: 13px;
+      color: var(--hint);
+      margin-top: 2px;
+    }
+
+    .del-btn {
+      flex-shrink: 0;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: rgba(239,68,68,0.1);
+      border: none;
+      color: rgba(239,68,68,0.65);
+      font-size: 13px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s, color 0.15s, transform 0.1s;
+    }
+
+    .del-btn:hover  { background: rgba(239,68,68,0.2); color: var(--danger); }
+    .del-btn:active { transform: scale(0.88); }
+
+    /* Progress */
+    .progress-track {
+      height: 7px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 9px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 999px;
+      width: 0;
+      transition: width 0.85s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .progress-fill.ok     { background: linear-gradient(90deg, #16a34a, #22c55e); }
+    .progress-fill.warn   { background: linear-gradient(90deg, #d97706, #f59e0b); }
+    .progress-fill.danger {
+      background: linear-gradient(90deg, #dc2626, #ef4444);
+      animation: dangerPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes dangerPulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.7; }
+    }
+
+    /* Footer */
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--hint);
+    }
+
+    .days-left.urgent {
+      color: var(--danger);
+      font-weight: 600;
+    }
+
+    /* ── Delete confirm overlay ── */
+    .confirm-overlay {
+      position: absolute;
+      inset: 0;
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .confirm-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .confirm-text {
+      font-size: 15px;
+      font-weight: 500;
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    .confirm-btns {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 11px;
+      border-radius: 10px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn:active { opacity: 0.75; transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; pointer-events: none; }
+
+    .btn-cancel  { background: rgba(255,255,255,0.1); color: var(--text); }
+    .btn-confirm { background: var(--danger); color: #fff; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <h1>📋 Мои подписки</h1>
+    <div id="badge" class="badge hidden"></div>
+  </div>
+  <button id="refreshBtn" class="refresh-btn" title="Обновить">↻</button>
+</div>
+
+<!-- Loading -->
+<div id="loading" class="state">
+  <div class="spinner"></div>
+  <p class="state-hint">Загружаю...</p>
+</div>
+
+<!-- Empty -->
+<div id="empty" class="state hidden">
+  <div class="state-icon">📭</div>
+  <p class="state-title">Подписок пока нет</p>
+  <p class="state-hint">Напишите боту название сервиса,<br>стоимость и дату оформления</p>
+</div>
+
+<!-- Error -->
+<div id="error" class="state hidden">
+  <div class="state-icon">⚠️</div>
+  <p class="state-title">Ошибка загрузки</p>
+  <p id="errorMsg" class="state-hint"></p>
+</div>
+
+<!-- List -->
+<div id="list" class="list hidden"></div>
+
+<script>
+// ── Config ─────────────────────────────────────────────────
+const SUPABASE_URL      = 'https://gzsbodvyalwvfmzgwggf.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd6c2JvZHZ5YWx3dmZtemd3Z2dmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MjM4MzcsImV4cCI6MjA5MzM5OTgzN30.7dSJEQpWh2S1muvaAs2mFS70SARnuG4sE8ucsfNGpM0';
+// ───────────────────────────────────────────────────────────
+
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+
+const userId = tg?.initDataUnsafe?.user?.id ?? null;
+
+const API_HEADERS = {
+  'apikey':        SUPABASE_ANON_KEY,
+  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+  'Content-Type':  'application/json',
+};
+
+// Service → emoji map
+const EMOJI = {
+  spotify:'🎵', netflix:'🎬', youtube:'▶️', amazon:'📦',
+  apple:'🍎', icloud:'☁️', adobe:'🎨', figma:'✏️',
+  яндекс:'🟡', yandex:'🟡', vk:'💙', telegram:'✈️',
+  github:'💻', notion:'📝', slack:'💬', zoom:'📹',
+  discord:'🎮', chatgpt:'🤖', openai:'🤖', claude:'🧠',
+  midjourney:'🖼️', google:'🔍', dropbox:'📦', canva:'🎨',
+  office:'📊', microsoft:'💼', linkedin:'💼', twitter:'🐦',
+  instagram:'📸', tiktok:'🎶',
+};
+
+function getEmoji(name) {
+  const lower = name.toLowerCase();
+  for (const [key, val] of Object.entries(EMOJI)) {
+    if (lower.includes(key)) return val;
+  }
+  return '💳';
+}
+
+function calcStatus(startDate, periodDays) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(startDate + 'T00:00:00');
+  start.setHours(0, 0, 0, 0);
+
+  const daysSince = Math.floor((today - start) / 86400000);
+  if (daysSince < 0) {
+    const renewal = new Date(start);
+    return { elapsed: 0, remaining: periodDays, progress: 0, renewal };
+  }
+
+  const elapsed    = daysSince % periodDays;
+  const remaining  = periodDays - elapsed;
+  const progress   = (elapsed / periodDays) * 100;
+  const renewal    = new Date(today);
+  renewal.setDate(today.getDate() + remaining);
+
+  return { elapsed, remaining, progress, renewal };
+}
+
+function colorClass(remaining) {
+  if (remaining <= 5)  return 'danger';
+  if (remaining <= 10) return 'warn';
+  return 'ok';
+}
+
+function fmtDate(d) {
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
+
+function fmtCost(cost, currency) {
+  const sym = { RUB:'₽', USD:'$', EUR:'€', UAH:'₴' }[currency] ?? currency;
+  return `${Number(cost).toLocaleString('ru-RU')} ${sym}`;
+}
+
+function fmtPeriod(days) {
+  if (days >= 360) return '/год';
+  if (days >= 28)  return '/мес';
+  return `/${days} дн.`;
+}
+
+function pluralDays(n) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 19) return `${n} дней`;
+  if (mod10 === 1) return `${n} день`;
+  if (mod10 >= 2 && mod10 <= 4) return `${n} дня`;
+  return `${n} дней`;
+}
+
+async function deleteSub(id) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/subscriptions?id=eq.${id}`, {
+    method: 'DELETE',
+    headers: API_HEADERS,
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+}
+
+function buildCard(sub) {
+  const { elapsed, remaining, progress, renewal } = calcStatus(
+    sub.start_date,
+    sub.billing_period_days || 30,
+  );
+  const urgent = remaining <= 5;
+  const cls    = colorClass(remaining);
+  const emoji  = getEmoji(sub.service_name);
+
+  const card = document.createElement('div');
+  card.className = `card${urgent ? ' urgent' : ''}`;
+  card.dataset.id = sub.id;
+
+  card.innerHTML = `
+    <div class="card-top">
+      <div class="card-info">
+        <div class="svc-icon">${emoji}</div>
+        <div style="min-width:0">
+          <div class="svc-name">${sub.service_name}</div>
+          <div class="svc-cost">${fmtCost(sub.cost, sub.currency || 'RUB')}${fmtPeriod(sub.billing_period_days || 30)}</div>
+        </div>
+      </div>
+      <button class="del-btn" title="Удалить">✕</button>
+    </div>
+
+    <div class="progress-track">
+      <div class="progress-fill ${cls}" data-w="${progress.toFixed(2)}"></div>
+    </div>
+
+    <div class="card-footer">
+      <span class="days-left${urgent ? ' urgent' : ''}">
+        ${urgent ? '⚠️ ' : ''}Осталось ${pluralDays(remaining)}
+      </span>
+      <span>🔄 ${fmtDate(renewal)}</span>
+    </div>
+
+    <div class="confirm-overlay">
+      <p class="confirm-text">Удалить «${sub.service_name}»?</p>
+      <div class="confirm-btns">
+        <button class="btn btn-cancel">Отмена</button>
+        <button class="btn btn-confirm">Удалить</button>
+      </div>
+    </div>
+  `;
+
+  const overlay    = card.querySelector('.confirm-overlay');
+  const delBtn     = card.querySelector('.del-btn');
+  const cancelBtn  = card.querySelector('.btn-cancel');
+  const confirmBtn = card.querySelector('.btn-confirm');
+
+  delBtn.addEventListener('click', () => overlay.classList.add('show'));
+  cancelBtn.addEventListener('click', () => overlay.classList.remove('show'));
+
+  confirmBtn.addEventListener('click', async () => {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = '...';
+    try {
+      await deleteSub(sub.id);
+      card.classList.add('removing');
+      setTimeout(() => {
+        card.remove();
+        updateBadge();
+        checkEmpty();
+      }, 280);
+    } catch {
+      confirmBtn.textContent = 'Ошибка';
+      setTimeout(() => {
+        confirmBtn.textContent = 'Удалить';
+        confirmBtn.disabled = false;
+        overlay.classList.remove('show');
+      }, 1500);
+    }
+  });
+
+  return card;
+}
+
+function updateBadge() {
+  const n     = document.querySelectorAll('.card:not(.removing)').length;
+  const badge = document.getElementById('badge');
+  if (n === 0) { badge.classList.add('hidden'); return; }
+  const word = n === 1 ? 'подписка' : n < 5 ? 'подписки' : 'подписок';
+  badge.textContent = `${n} ${word}`;
+  badge.classList.remove('hidden');
+}
+
+function checkEmpty() {
+  const n = document.querySelectorAll('.card:not(.removing)').length;
+  if (n === 0) {
+    document.getElementById('list').classList.add('hidden');
+    document.getElementById('empty').classList.remove('hidden');
+  }
+}
+
+function show(id)  { document.getElementById(id).classList.remove('hidden'); }
+function hide(id)  { document.getElementById(id).classList.add('hidden'); }
+function hideAll() { ['loading','empty','error','list'].forEach(hide); }
+
+async function load() {
+  hideAll();
+  show('loading');
+
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+
+  try {
+    let url = `${SUPABASE_URL}/rest/v1/subscriptions?select=*&order=created_at.asc`;
+    if (userId) url += `&user_id=eq.${userId}`;
+
+    const res = await fetch(url, { headers: API_HEADERS });
+    if (!res.ok) throw new Error(`Supabase: HTTP ${res.status}`);
+
+    const subs = await res.json();
+    hide('loading');
+
+    if (!Array.isArray(subs) || subs.length === 0) {
+      show('empty');
+      return;
+    }
+
+    // Sort: urgent first, then by days remaining
+    subs.sort((a, b) => {
+      const ra = calcStatus(a.start_date, a.billing_period_days || 30).remaining;
+      const rb = calcStatus(b.start_date, b.billing_period_days || 30).remaining;
+      return ra - rb;
+    });
+
+    const list = document.getElementById('list');
+    list.innerHTML = '';
+    subs.forEach(sub => list.appendChild(buildCard(sub)));
+    show('list');
+
+    // Animate bars after paint
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.querySelectorAll('.progress-fill').forEach(el => {
+        el.style.width = el.dataset.w + '%';
+      });
+    }));
+
+    updateBadge();
+
+  } catch (e) {
+    hide('loading');
+    document.getElementById('errorMsg').textContent = e.message;
+    show('error');
+  } finally {
+    btn.classList.remove('spinning');
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', load);
+
+load();
+</script>
+</body>
+</html>
